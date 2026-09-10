@@ -31,6 +31,13 @@ BOOKING_TRIGGERS = {
 }
 
 CANCEL_WORDS = {"cancel", "nevermind", "stop", "never mind", "exit"}
+QUESTION_STARTERS = {
+    "can", "does", "do", "how", "is", "are", "when", "where", "what", "which", "why",
+}
+NEW_TOPIC_WORDS = {
+    "billing", "insurance", "parking", "pharmacy", "symptom", "symptoms", "stroke", "heart",
+    "visiting", "hours", "emergency", "services", "department", "departments",
+}
 
 _sessions = {}
 
@@ -50,6 +57,19 @@ def wants_to_cancel(message: str) -> bool:
 
 def is_booking_in_progress(session_id: str) -> bool:
     return session_id in _sessions
+
+
+def abandon_booking(session_id: str):
+    """Drop an unfinished flow when the user starts a different topic."""
+    _sessions.pop(session_id, None)
+
+
+def is_new_topic(message: str) -> bool:
+    """Identify common standalone questions that should escape booking mode."""
+    tokens = set(_tokens(message))
+    if _match_department(message):
+        return False
+    return bool(tokens & QUESTION_STARTERS or tokens & NEW_TOPIC_WORDS)
 
 
 def _new_state():

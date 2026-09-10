@@ -6,8 +6,10 @@ from flask import Blueprint, request, jsonify
 from hospital_data import get_doctors_by_department, get_all_departments
 from services.ai_service import generate_ai_response
 from services.appointment_service import (
+    abandon_booking,
     handle_booking_reply,
     is_booking_in_progress,
+    is_new_topic,
     start_booking,
     wants_to_book,
 )
@@ -30,9 +32,12 @@ def chat():
 
     # If this session already has a booking in progress, every message
     # is part of that flow until it's completed or cancelled.
-    if is_booking_in_progress(session_id):
+    if is_booking_in_progress(session_id) and not is_new_topic(user_message):
         response = handle_booking_reply(session_id, user_message)
         return jsonify({"response": response, "session_id": session_id})
+
+    if is_booking_in_progress(session_id):
+        abandon_booking(session_id)
 
     # A fresh request to book an appointment starts the flow.
     if wants_to_book(user_message):
