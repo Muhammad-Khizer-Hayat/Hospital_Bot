@@ -1,0 +1,415 @@
+const API = "http://127.0.0.1:5000/api/chat";
+const UPLOAD_API = "http://127.0.0.1:5000/api/upload-doctors";
+const SOURCE_API = "http://127.0.0.1:5000/api/doctors-source";
+const DEPARTMENTS_API = "http://127.0.0.1:5000/api/departments";
+
+// One session id per browser tab, persisted for the tab's lifetime.
+// The backend uses this to track multi-turn flows (like appointment
+// booking) across separate /api/chat calls.
+function getSessionId() {
+  let sid = sessionStorage.getItem("chat_session_id");
+  if (!sid) {
+    sid = (crypto.randomUUID ? crypto.randomUUID() : `sid-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    sessionStorage.setItem("chat_session_id", sid);
+  }
+  return sid;
+}
+
+// Shared by both the text chat UI and voice mode — one place that
+// actually talks to the backend, so booking-flow continuity works
+// no matter which mode the person is using.
+async function askBackend(text) {
+  const res = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text, session_id: getSessionId() }),
+  });
+  const data = await res.json();
+  return data.response || "Sorry, I didn't get a response.";
+}
+
+// TODO: replace with your real hospital/on-call contact number.
+// Used by every "Call Now" / emergency button below — E.164 format
+// (e.g. "+923001234567") works best for the tel: link.
+const EMERGENCY_PHONE = "+10000000000";
+
+function wireEmergencyButtons() {
+  document.querySelectorAll("[data-emergency-call]").forEach((el) => {
+    el.href = `tel:${EMERGENCY_PHONE}`;
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function hideWelcome() {
+  const w = document.getElementById("welcome");
+  if (w) w.remove();
+}
+
+function scrollBottom() {
+  const box = document.getElementById("messages");
+  box.scrollTop = box.scrollHeight;
+}
+
+// Turn the bot's lightweight markdown (**bold**, "- " bullets, blank-line
+// paragraphs) into real HTML so replies render as clean formatted text
+// instead of literal asterisks and dashes.
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderMarkdown(raw) {
+  const lines = escapeHtml(raw).split("\n");
+  let html = "";
+  let inList = false;
+
+  const closeList = () => {
+    if (inList) {
+      html += "</ul>";
+      inList = false;
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      closeList();
+      continue;
+    }
+
+    // Bullet line: "- something"
+    if (line.startsWith("- ")) {
+      if (!inList) {
+        html += "<ul>";
+        inList = true;
+      }
+      html += `<li>${line.slice(2).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</li>`;
+      continue;
+    }
+
+    closeList();
+
+    // Heading line: "**Something**" on its own line
+    const headingMatch = line.match(/^\*\*(.+?)\*\*$/);
+    if (headingMatch) {
+      html += `<div class="bubble-heading">${headingMatch[1]}</div>`;
+      continue;
+    }
+
+    html += `<p>${line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</p>`;
+  }
+  closeList();
+  return html;
+}
+
+function addBubble(text, role) {
+  const box = document.getElementById("messages");
+
+  const row = document.createElement("div");
+  row.className = `bubble-row ${role}`;
+
+  const avatar = document.createElement("div");
+  avatar.className = `avatar ${role === "bot" ? "bot-avatar" : "user-avatar"}`;
+  avatar.textContent = role === "bot" ? "+" : "U";
+
+  const bubble = document.createElement("div");
+  bubble.className = `bubble ${role === "bot" ? "bot-bubble" : "user-bubble"}`;
+  bubble.innerHTML = role === "bot" ? renderMarkdown(text) : escapeHtml(text).replace(/\n/g, "<br>");
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  box.appendChild(row);
+  scrollBottom();
+  return bubble;
+}
+
+function showTyping() {
+  const box = document.getElementById("messages");
+
+  const row = document.createElement("div");
+  row.className = "bubble-row bot";
+  row.id = "typing-row";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar bot-avatar";
+  avatar.textContent = "+";
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble bot-bubble";
+  bubble.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  box.appendChild(row);
+  scrollBottom();
+}
+
+function removeTyping() {
+  const t = document.getElementById("typing-row");
+  if (t) t.remove();
+}
+
+// ── Send ───────────────────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById("msg-input");
+  const btn   = document.getElementById("send-btn");
+  const text  = input.value.trim();
+  if (!text) return;
+
+  hideWelcome();
+  addBubble(text, "user");
+  input.value = "";
+  input.style.height = "auto";
+  btn.disabled = true;
+  showTyping();
+
+  try {
+    const reply = await askBackend(text);
+    removeTyping();
+    addBubble(reply, "bot");
+  } catch (err) {
+    removeTyping();
+    addBubble("⚠️ Could not reach the server. Make sure the backend is running.", "bot");
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+
+// ── Quick buttons ──────────────────────────────────────────────
+function quickAsk(el) {
+  document.getElementById("msg-input").value = el.textContent || el.innerText;
+  sendMessage();
+}
+
+function deptAsk(dept) {
+  document.getElementById("msg-input").value = `Tell me about the ${dept} department`;
+  sendMessage();
+}
+
+// ── Keyboard ───────────────────────────────────────────────────
+function handleKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+// ── Auto-resize textarea ───────────────────────────────────────
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+// ── Doctors PDF upload ───────────────────────────────────────────
+async function uploadDoctorsPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById("upload-status");
+  statusEl.textContent = "Reading PDF…";
+  statusEl.className = "upload-status uploading";
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch(UPLOAD_API, { method: "POST", body: formData });
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.textContent = data.error || "Couldn't process that PDF.";
+      statusEl.className = "upload-status error";
+      return;
+    }
+
+    if (data.doctors_found > 0) {
+      statusEl.textContent = `✓ Loaded ${data.doctors_found} doctor${data.doctors_found === 1 ? "" : "s"} across ${data.departments_found.length} department${data.departments_found.length === 1 ? "" : "s"}.`;
+      statusEl.className = "upload-status success";
+      refreshDepartmentChips();
+    } else {
+      statusEl.textContent = (data.warnings && data.warnings[0]) || "No doctors found in that PDF.";
+      statusEl.className = "upload-status error";
+    }
+  } catch (err) {
+    statusEl.textContent = "⚠️ Could not reach the server.";
+    statusEl.className = "upload-status error";
+  } finally {
+    input.value = "";
+  }
+}
+
+// Refresh the sidebar department chips + count badge from whatever data
+// is currently active (uploaded PDF or the built-in defaults).
+async function refreshDepartmentChips() {
+  try {
+    const [sourceRes, deptRes] = await Promise.all([
+      fetch(SOURCE_API),
+      fetch(DEPARTMENTS_API),
+    ]);
+    const sourceData = await sourceRes.json();
+    const deptData = await deptRes.json();
+
+    const badge = document.getElementById("doctor-count-badge");
+    if (badge) {
+      badge.textContent = `${sourceData.doctor_count} doctor${sourceData.doctor_count === 1 ? "" : "s"} loaded`;
+      badge.classList.toggle("from-pdf", sourceData.using_uploaded_data);
+    }
+
+    const wrap = document.getElementById("dept-wrap");
+    if (wrap && Array.isArray(deptData.departments)) {
+      wrap.innerHTML = "";
+      deptData.departments.forEach((dept) => {
+        const chip = document.createElement("span");
+        chip.className = "dept";
+        chip.textContent = dept;
+        chip.onclick = () => deptAsk(dept);
+        wrap.appendChild(chip);
+      });
+    }
+  } catch (err) {
+    // silent — non-critical UI refresh
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  wireEmergencyButtons();
+  refreshDepartmentChips();
+});
+
+// ── Voice call mode ────────────────────────────────────────────
+// Uses the browser's built-in speech recognition (STT) and speech
+// synthesis (TTS) — no telephony provider, no API key, works offline
+// once the page is loaded. Chrome/Edge have the best support; Safari
+// is partial; Firefox doesn't support SpeechRecognition at all.
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+let voiceRecognition = null;
+let voiceCallActive = false;
+let voiceMuted = false;
+
+const END_CALL_PHRASES = ["goodbye", "bye", "end call", "hang up", "that's all"];
+
+function voiceSupported() {
+  return !!SpeechRecognitionAPI && "speechSynthesis" in window;
+}
+
+function setCallStatus(text) {
+  const el = document.getElementById("call-status");
+  if (el) el.textContent = text;
+}
+
+function appendCallTranscript(text, role) {
+  const box = document.getElementById("call-transcript");
+  if (!box) return;
+  const line = document.createElement("div");
+  line.className = `call-line ${role}`;
+  line.textContent = text;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function speak(text, onDone) {
+  window.speechSynthesis.cancel();
+  // Strip markdown symbols so TTS doesn't read out "asterisk asterisk"
+  const clean = text.replace(/\*\*/g, "").replace(/^- /gm, "").replace(/\n+/g, ". ");
+  const utter = new SpeechSynthesisUtterance(clean);
+  utter.rate = 1.0;
+  utter.onstart = () => setCallStatus("Speaking…");
+  utter.onend = () => {
+    if (onDone) onDone();
+  };
+  window.speechSynthesis.speak(utter);
+}
+
+function startListening() {
+  if (!voiceCallActive || voiceMuted) return;
+
+  voiceRecognition = new SpeechRecognitionAPI();
+  voiceRecognition.lang = "en-US";
+  voiceRecognition.interimResults = false;
+  voiceRecognition.maxAlternatives = 1;
+
+  voiceRecognition.onstart = () => setCallStatus("Listening…");
+
+  voiceRecognition.onresult = async (event) => {
+    const transcript = event.results[0][0].transcript.trim();
+    if (!transcript) {
+      if (voiceCallActive) startListening();
+      return;
+    }
+    appendCallTranscript(transcript, "user");
+
+    if (END_CALL_PHRASES.some((p) => transcript.toLowerCase().includes(p))) {
+      speak("Thanks for calling City General Hospital. Take care!", () => endVoiceCall());
+      return;
+    }
+
+    setCallStatus("Thinking…");
+    try {
+      const reply = await askBackend(transcript);
+      appendCallTranscript(reply.replace(/\*\*/g, "").replace(/^- /gm, "• "), "bot");
+      if (voiceCallActive) speak(reply, () => startListening());
+    } catch (err) {
+      appendCallTranscript("Sorry, I couldn't reach the server.", "bot");
+      if (voiceCallActive) speak("Sorry, I couldn't reach the server.", () => startListening());
+    }
+  };
+
+  voiceRecognition.onerror = (event) => {
+    // "no-speech" just means silence — restart listening quietly.
+    if (event.error === "no-speech" && voiceCallActive) {
+      startListening();
+      return;
+    }
+    setCallStatus(`Mic error: ${event.error}`);
+  };
+
+  voiceRecognition.onend = () => {
+    // If nothing else restarted listening (e.g. we're mid-speak), leave it.
+  };
+
+  voiceRecognition.start();
+}
+
+function startVoiceCall() {
+  if (!voiceSupported()) {
+    alert("Voice mode isn't supported in this browser. Try Chrome or Edge.");
+    return;
+  }
+  voiceCallActive = true;
+  document.getElementById("call-overlay").classList.add("active");
+  document.getElementById("call-transcript").innerHTML = "";
+  setCallStatus("Connecting…");
+
+  const greeting = "Hi, you've reached City General Hospital's virtual assistant. How can I help — or say 'book an appointment' to get started?";
+  appendCallTranscript(greeting, "bot");
+  speak(greeting, () => startListening());
+}
+
+function endVoiceCall() {
+  voiceCallActive = false;
+  window.speechSynthesis.cancel();
+  if (voiceRecognition) {
+    voiceRecognition.onresult = null;
+    voiceRecognition.onerror = null;
+    voiceRecognition.stop();
+  }
+  document.getElementById("call-overlay").classList.remove("active");
+  setCallStatus("");
+}
+
+function toggleMute() {
+  voiceMuted = !voiceMuted;
+  const btn = document.getElementById("mute-btn");
+  if (btn) btn.textContent = voiceMuted ? "🔇 Unmute" : "🎙️ Mute";
+  if (voiceMuted && voiceRecognition) {
+    voiceRecognition.stop();
+    setCallStatus("Muted");
+  } else if (!voiceMuted && voiceCallActive) {
+    startListening();
+  }
+}

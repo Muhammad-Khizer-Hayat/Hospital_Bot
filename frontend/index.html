@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>City General Hospital - AI Assistant</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <div class="logo">+</div>
+      <div>
+        <div class="hospital-name">City General Hospital</div>
+        <div class="hospital-sub">AI Health Assistant</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="status-dot"></span>
+      <span class="status-label">AI Online</span>
+      <button type="button" class="voice-call-btn" onclick="startVoiceCall()" aria-label="Start voice call">
+        🎙️ Voice Assistant
+      </button>
+      <a href="#" data-emergency-call class="emergency-badge" aria-label="Call emergency line">
+        <span class="emergency-badge-icon">☎</span> Emergency Call
+      </a>
+    </div>
+  </header>
+
+  <!-- ── Main Layout ────────────────────────────────────────────────── -->
+  <div class="layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+      <div class="sidebar-block">
+        <div class="block-title">QUICK QUESTIONS</div>
+        <button class="qbtn" onclick="quickAsk(this)">What departments are available?</button>
+        <button class="qbtn" onclick="quickAsk(this)">How do I book an appointment?</button>
+        <button class="qbtn" onclick="quickAsk(this)">Where is the pharmacy?</button>
+        <button class="qbtn" onclick="quickAsk(this)">What are visiting hours?</button>
+        <button class="qbtn" onclick="quickAsk(this)">What insurance do you accept?</button>
+        <button class="qbtn" onclick="quickAsk(this)">Where can I park?</button>
+        <button class="qbtn" onclick="quickAsk(this)">Signs of a heart attack</button>
+        <button class="qbtn" onclick="quickAsk(this)">Stroke warning signs</button>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="block-title">DEPARTMENTS</div>
+        <div class="dept-wrap" id="dept-wrap">
+          <span class="dept-loading">Loading…</span>
+        </div>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="block-title">DOCTORS DATA</div>
+        <label class="upload-box" for="doctors-pdf-input">
+          <span class="upload-icon">⭱</span>
+          <span class="upload-text">Upload doctors list (PDF)</span>
+          <input
+            type="file"
+            id="doctors-pdf-input"
+            accept="application/pdf"
+            onchange="uploadDoctorsPdf(this)"
+            hidden
+          />
+        </label>
+        <div id="upload-status" class="upload-status"></div>
+        <div id="doctor-count-badge" class="doctor-count-badge">—</div>
+      </div>
+
+      <div class="alert-box">
+        <div class="alert-title">🚨 Medical Emergency?</div>
+        <div class="alert-text">
+          Go to the Emergency Department — Ground Floor, Block A — open 24 hours.
+        </div>
+        <a href="#" data-emergency-call class="call-now-btn">☎ Call Now</a>
+      </div>
+
+    </aside>
+
+    <!-- Chat -->
+    <div class="chat-wrap">
+
+      <!-- Messages list -->
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">+</div>
+          <h2>How can I help you today?</h2>
+          <p>Ask about departments, appointments, services, billing, or health questions.</p>
+          <div class="welcome-tags">
+            <span class="tag" onclick="quickAsk(this)">Find a department</span>
+            <span class="tag" onclick="quickAsk(this)">Book appointment</span>
+            <span class="tag" onclick="quickAsk(this)">Billing info</span>
+            <span class="tag" onclick="quickAsk(this)">Visiting hours</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="input-bar">
+        <div class="input-wrap">
+          <textarea
+            id="msg-input"
+            placeholder="Type your question here..."
+            rows="1"
+            onkeydown="handleKey(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+        <div class="input-note">
+          Powered by Muhammad Khizer Hayat &nbsp;|&nbsp; khizerhayatsangla@gmail.com
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Voice call overlay ─────────────────────────────────────────── -->
+  <div id="call-overlay" class="call-overlay">
+    <div class="call-card">
+      <div class="call-avatar">
+        <span class="call-avatar-pulse"></span>
+        +
+      </div>
+      <div class="call-title">City General Assistant</div>
+      <div id="call-status" class="call-status">Connecting…</div>
+
+      <div id="call-transcript" class="call-transcript"></div>
+
+      <div class="call-controls">
+        <button id="mute-btn" class="call-control-btn" onclick="toggleMute()">🎙️ Mute</button>
+        <button class="call-control-btn end-call-btn" onclick="endVoiceCall()">📞 End Call</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

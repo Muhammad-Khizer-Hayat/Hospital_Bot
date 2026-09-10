@@ -1,0 +1,144 @@
+{
+  "doctors": [
+    {
+      "name": "Dr. Ayesha Khan",
+      "department": "Cardiology",
+      "specialization": "Heart Failure & Transplant"
+    },
+    {
+      "name": "Dr. Bilal Ahmed",
+      "department": "Neurology",
+      "specialization": "Stroke & Epilepsy"
+    },
+    {
+      "name": "Dr. Sana Iqbal",
+      "department": "Orthopedics",
+      "specialization": "Joint Replacement"
+    },
+    {
+      "name": "Dr. Ali Raza",
+      "department": "Pediatrics",
+      "specialization": "Neonatology"
+    },
+    {
+      "name": "Dr. Fatima Noor",
+      "department": "Dermatology",
+      "specialization": "Cosmetic Dermatology"
+    },
+    {
+      "name": "Dr. Usman Tariq",
+      "department": "Cardiology",
+      "specialization": "Interventional Cardiology"
+    },
+    {
+      "name": "Dr. Hina Malik",
+      "department": "Neurology",
+      "specialization": "Pediatric Neurology"
+    },
+    {
+      "name": "Dr. Kamran Sheikh",
+      "department": "Urology",
+      "specialization": "Kidney Stones"
+    },
+    {
+      "name": "Dr. Nadia Yousaf",
+      "department": "Psychiatry",
+      "specialization": "Anxiety & Depression"
+    },
+    {
+      "name": "Dr. Omar Farooq",
+      "department": "Oncology",
+      "specialization": "Medical Oncology"
+    },
+    {
+      "name": "Dr. Zainab Hussain",
+      "department": "Oncology",
+      "specialization": "Surgical Oncology"
+    },
+    {
+      "name": "Dr. Saad Qureshi",
+      "department": "Orthopedics",
+      "specialization": "Sports Injuries"
+    },
+    {
+      "name": "Dr. Mahnoor Aziz",
+      "department": "Gynecology",
+      "specialization": "High-Risk Pregnancy"
+    },
+    {
+      "name": "Dr. Farhan Chaudhry",
+      "department": "ENT",
+      "specialization": "Sinus & Hearing Disorders"
+    },
+    {
+      "name": "Dr. Rabia Siddiqui",
+      "department": "Ophthalmology",
+      "specialization": "Cataract & Retina"
+    },
+    {
+      "name": "Dr. Imran Baig",
+      "department": "Gastroenterology",
+      "specialization": "Liver Disease"
+    },
+    {
+      "name": "Dr. Sadia Rehman",
+      "department": "Endocrinology",
+      "specialization": "Diabetes & Thyroid"
+    },
+    {
+      "name": "Dr. Adeel Anwar",
+      "department": "Pulmonology",
+      "specialization": "Asthma & COPD"
+    },
+    {
+      "name": "Dr. Mariam Shah",
+      "department": "Nephrology",
+      "specialization": "Chronic Kidney Disease"
+    },
+    {
+      "name": "Dr. Tariq Mehmood",
+      "department": "General Surgery",
+      "specialization": "Laparoscopic Surgery"
+    },
+    {
+      "name": "Dr. Ayesha Siddiqa",
+      "department": "Dermatology",
+      "specialization": "Skin Allergies"
+    },
+    {
+      "name": "Dr. Bilal Nasir",
+      "department": "Emergency",
+      "specialization": "Trauma & Critical Care"
+    },
+    {
+      "name": "Dr. Hamza Javed",
+      "department": "Radiology",
+      "specialization": "Diagnostic Imaging"
+    },
+    {
+      "name": "Dr. Iqra Farooqi",
+      "department": "Pediatrics",
+      "specialization": "Pediatric Cardiology"
+    }
+  ],
+  "departments": [
+    "Cardiology",
+    "Dermatology",
+    "ENT",
+    "Emergency",
+    "Endocrinology",
+    "Gastroenterology",
+    "General Surgery",
+    "Gynecology",
+    "Nephrology",
+    "Neurology",
+    "Oncology",
+    "Ophthalmology",
+    "Orthopedics",
+    "Pediatrics",
+    "Psychiatry",
+    "Pulmonology",
+    "Radiology",
+    "Urology"
+  ]
+}
