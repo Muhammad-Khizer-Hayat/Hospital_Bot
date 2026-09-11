@@ -71,15 +71,5 @@ def list_doctors():
 
 @chat_bp.route("/appointments", methods=["GET"])
 def list_appointments():
-    import json
-    import os
-    from services.appointment_service import APPOINTMENTS_FILE
-
-    if not os.path.exists(APPOINTMENTS_FILE):
-        return jsonify({"appointments": []})
-    try:
-        with open(APPOINTMENTS_FILE, "r", encoding="utf-8") as f:
-            appointments = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        appointments = []
-    return jsonify({"appointments": appointments})
+    import database
+    return jsonify({"appointments": database.get_all_appointments()})

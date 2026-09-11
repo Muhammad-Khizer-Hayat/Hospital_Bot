@@ -4,6 +4,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import Config
+import database
 from routes.chat import chat_bp
 from routes.upload import upload_bp
 from flask import Flask, send_from_directory
@@ -16,6 +17,7 @@ def create_app():
     app = Flask(__name__, static_folder=frontend_dir)
     app.config.from_object(Config)
     CORS(app)
+    database.init_db()
     app.register_blueprint(chat_bp, url_prefix="/api")
     app.register_blueprint(upload_bp, url_prefix="/api")
 

@@ -2,29 +2,31 @@
 """
 A deterministic, step-by-step booking flow — the agent asks one thing
 at a time and won't move on until it gets a usable answer. This is on
-purpose: letting the LLM freely improvise a multi-turn booking (name,
-department, date, time, phone) is exactly where models drop or
-invent details. A plain state machine can't do that.
+purpose: letting the LLM freely improvise a multi-turn booking is
+exactly where models drop or invent details. A plain state machine
+can't do that.
+
+Flow order: name -> country -> department -> doctor -> date -> time
+-> phone -> confirm. Identity (name/country) is collected first, then
+the appointment details.
 
 Session state is kept in memory, keyed by a session_id the frontend
 generates once and sends with every request. This is fine for a
 single-server demo/prototype; move it to Redis or a DB table before
-running multiple server processes or workers.
+running multiple server processes or workers — the appointments
+themselves are safely persisted to SQLite (see database.py) as soon
+as they're confirmed, only the in-progress conversation state lives
+in memory.
 """
-import json
-import os
+import difflib
 import re
 import uuid
 from datetime import datetime
 
 import dateparser
 
+import database
 import hospital_data
-from config import Config
-
-APPOINTMENTS_FILE = os.path.join(os.path.dirname(Config.DOCTORS_DATA_FILE), "appointments.json")
-
-STEPS = ["department", "doctor", "date", "time", "name", "phone", "confirm"]
 
 BOOKING_TRIGGERS = {
     "book", "booking", "appointment", "schedule", "reserve",
@@ -73,16 +75,12 @@ def is_new_topic(message: str) -> bool:
 
 
 def _new_state():
-    return {"step": "department", "data": {}}
+    return {"step": "name", "data": {}}
 
 
 def start_booking(session_id: str) -> str:
     _sessions[session_id] = _new_state()
-    dept_list = ", ".join(hospital_data.get_all_departments())
-    return (
-        "Sure — let's get you booked in. Which department would you like "
-        f"to see a doctor in? We have: {dept_list}."
-    )
+    return "Sure — let's get you booked in. Can I get your full name, please?"
 
 
 def _cancel(session_id: str) -> str:
@@ -96,7 +94,6 @@ def _match_department(text: str):
     for token in tokens:
         if token in dept_lookup:
             return dept_lookup[token]
-    import difflib
     for token in tokens:
         close = difflib.get_close_matches(token, list(dept_lookup.keys()), n=1, cutoff=0.78)
         if close:
@@ -126,34 +123,29 @@ def _phone_looks_valid(text: str):
     return 7 <= len(digits) <= 15
 
 
+def _country_looks_valid(text: str):
+    letters = re.sub(r"[^a-zA-Z]", "", text)
+    return len(letters) >= 3
+
+
 def _summary(data: dict) -> str:
     lines = [
+        f"- Name: {data.get('name')}",
+        f"- Country: {data.get('country')}",
         f"- Department: {data.get('department')}",
         f"- Doctor: {data.get('doctor_name', 'Any available doctor')}",
         f"- Date: {data.get('date')}",
         f"- Time: {data.get('time')}",
-        f"- Name: {data.get('name')}",
         f"- Phone: {data.get('phone')}",
     ]
     return "Here's what I've got:\n\n" + "\n".join(lines) + "\n\nShall I confirm this appointment? (yes/no)"
 
 
-def _save_appointment(data: dict):
-    os.makedirs(os.path.dirname(APPOINTMENTS_FILE), exist_ok=True)
-    existing = []
-    if os.path.exists(APPOINTMENTS_FILE):
-        try:
-            with open(APPOINTMENTS_FILE, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            existing = []
+def _save_appointment(data: dict) -> dict:
     record = dict(data)
     record["id"] = str(uuid.uuid4())[:8]
     record["booked_at"] = datetime.now().isoformat(timespec="seconds")
-    existing.append(record)
-    with open(APPOINTMENTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(existing, f, indent=2)
-    return record
+    return database.insert_appointment(record)
 
 
 def handle_booking_reply(session_id: str, message: str) -> str:
@@ -166,6 +158,21 @@ def handle_booking_reply(session_id: str, message: str) -> str:
 
     step = state["step"]
     data = state["data"]
+
+    if step == "name":
+        if len(message.strip()) < 2:
+            return "Sorry, could you tell me your full name?"
+        data["name"] = message.strip()
+        state["step"] = "country"
+        return f"Thanks, {data['name']}. Which country are you booking from?"
+
+    if step == "country":
+        if not _country_looks_valid(message):
+            return "Sorry, which country are you calling/booking from?"
+        data["country"] = message.strip()
+        dept_list = ", ".join(hospital_data.get_all_departments())
+        state["step"] = "department"
+        return f"Got it. Which department would you like to see a doctor in? We have: {dept_list}."
 
     if step == "department":
         dept = _match_department(message)
@@ -206,13 +213,6 @@ def handle_booking_reply(session_id: str, message: str) -> str:
 
     if step == "time":
         data["time"] = message.strip()
-        state["step"] = "name"
-        return "And who is this appointment for? Please give me the patient's full name."
-
-    if step == "name":
-        if len(message.strip()) < 2:
-            return "Sorry, could you give me the full name for the appointment?"
-        data["name"] = message.strip()
         state["step"] = "phone"
         return "What's the best contact phone number to reach you on?"
 
@@ -229,7 +229,7 @@ def handle_booking_reply(session_id: str, message: str) -> str:
             record = _save_appointment(data)
             _sessions.pop(session_id, None)
             return (
-                f"You're all set! Appointment confirmed for {record['name']} with "
+                f"You're all set, {record['name']}! Appointment confirmed with "
                 f"{record.get('doctor_name') or 'an available doctor'} ({record['department']}) "
                 f"on {record['date']} at {record['time']}. "
                 f"Your reference number is {record['id']}."
