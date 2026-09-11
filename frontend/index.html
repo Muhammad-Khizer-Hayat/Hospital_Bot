@@ -11,6 +11,7 @@
   <!-- ── Header ─────────────────────────────────────────────────────── -->
   <header>
     <div class="header-left">
+      <button type="button" class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
       <div class="logo">+</div>
       <div>
         <div class="hospital-name">City General Hospital</div>
@@ -33,7 +34,14 @@
   <div class="layout">
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
+
+      <button class="book-cta" onclick="bookAppointmentCta()">
+        📅 Book an Appointment
+      </button>
+      <button class="view-bookings-link" onclick="openBookingsModal()">
+        📋 View Booked Appointments
+      </button>
 
       <div class="sidebar-block">
         <div class="block-title">QUICK QUESTIONS</div>
@@ -134,6 +142,22 @@
       <div class="call-controls">
         <button id="mute-btn" class="call-control-btn" onclick="toggleMute()">🎙️ Mute</button>
         <button class="call-control-btn end-call-btn" onclick="endVoiceCall()">📞 End Call</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile sidebar backdrop -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
+  <!-- ── Bookings modal ─────────────────────────────────────────────── -->
+  <div id="bookings-modal" class="bookings-modal">
+    <div class="bookings-card">
+      <div class="bookings-header">
+        <div class="bookings-title">Booked Appointments</div>
+        <button class="bookings-close" onclick="closeBookingsModal()" aria-label="Close">✕</button>
+      </div>
+      <div id="bookings-body" class="bookings-body">
+        <div class="bookings-loading">Loading…</div>
       </div>
     </div>
   </div>

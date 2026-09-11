@@ -190,6 +190,66 @@ function deptAsk(dept) {
   sendMessage();
 }
 
+function bookAppointmentCta() {
+  closeSidebarOnMobile();
+  document.getElementById("msg-input").value = "Book an appointment";
+  sendMessage();
+}
+
+// ── Mobile sidebar drawer ──────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("open");
+  document.getElementById("sidebar-backdrop").classList.toggle("active");
+}
+
+function closeSidebarOnMobile() {
+  if (window.innerWidth <= 768) {
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("sidebar-backdrop").classList.remove("active");
+  }
+}
+
+// ── Bookings viewer ────────────────────────────────────────────
+async function openBookingsModal() {
+  closeSidebarOnMobile();
+  const modal = document.getElementById("bookings-modal");
+  const body = document.getElementById("bookings-body");
+  modal.classList.add("active");
+  body.innerHTML = '<div class="bookings-loading">Loading…</div>';
+
+  try {
+    const res = await fetch(`${API.replace("/chat", "")}/appointments`);
+    const data = await res.json();
+    const appointments = data.appointments || [];
+
+    if (appointments.length === 0) {
+      body.innerHTML = '<div class="bookings-empty">No appointments booked yet.</div>';
+      return;
+    }
+
+    const rows = appointments.map((a) => `
+      <div class="booking-row">
+        <div class="booking-row-main">
+          <span class="booking-name">${a.patient_name || "—"}</span>
+          <span class="booking-ref">#${a.id}</span>
+        </div>
+        <div class="booking-row-details">
+          ${a.department || "—"}${a.doctor_name ? " · " + a.doctor_name : ""}<br>
+          ${a.appointment_date || "—"} at ${a.appointment_time || "—"}<br>
+          ${a.country ? a.country + " · " : ""}${a.phone || "—"}
+        </div>
+      </div>
+    `).join("");
+    body.innerHTML = rows;
+  } catch (err) {
+    body.innerHTML = '<div class="bookings-empty">⚠️ Could not load appointments.</div>';
+  }
+}
+
+function closeBookingsModal() {
+  document.getElementById("bookings-modal").classList.remove("active");
+}
+
 // ── Keyboard ───────────────────────────────────────────────────
 function handleKey(e) {
   if (e.key === "Enter" && !e.shiftKey) {

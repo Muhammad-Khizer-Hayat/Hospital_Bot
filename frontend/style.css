@@ -573,3 +573,165 @@ textarea::placeholder { color: var(--gray2); }
 .call-control-btn:active { transform: scale(.96); }
 .end-call-btn { background: var(--red); }
 .end-call-btn:hover { background: #dc2626; }
+
+/* ── Mobile menu toggle ───────────────────────────────────────── */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* ── Sidebar CTAs ─────────────────────────────────────────────── */
+.book-cta {
+  width: 100%;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--blue-lt) 100%);
+  color: #fff;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 12px 0;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 14px rgba(26,86,219,.28);
+  transition: transform .12s, box-shadow .12s;
+}
+.book-cta:hover  { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(26,86,219,.34); }
+.book-cta:active { transform: translateY(0); }
+
+.view-bookings-link {
+  width: 100%;
+  background: var(--gray1);
+  color: var(--gray3);
+  border: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 10px 0;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 22px;
+  transition: background .15s;
+}
+.view-bookings-link:hover { background: #dde5f0; }
+
+/* ── Bookings modal ───────────────────────────────────────────── */
+.bookings-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(11,31,58,.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 20px;
+}
+.bookings-modal.active { display: flex; }
+
+.bookings-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.bookings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--gray1);
+}
+.bookings-title { font-family: 'DM Serif Display', serif; font-size: 17px; color: var(--navy); }
+.bookings-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; color: var(--gray2);
+  width: 28px; height: 28px; border-radius: 50%;
+  transition: background .15s;
+}
+.bookings-close:hover { background: var(--gray1); }
+
+.bookings-body { overflow-y: auto; padding: 8px 18px 18px; }
+.bookings-loading, .bookings-empty {
+  text-align: center; color: var(--gray2); font-size: 13px; padding: 30px 0;
+}
+
+.booking-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gray1);
+}
+.booking-row:last-child { border-bottom: none; }
+.booking-row-main {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 4px;
+}
+.booking-name { font-weight: 600; font-size: 13.5px; color: var(--navy); }
+.booking-ref { font-size: 11px; color: var(--gray2); font-family: monospace; }
+.booking-row-details { font-size: 12.5px; color: var(--gray3); line-height: 1.6; }
+
+/* ── Mobile responsiveness ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .menu-toggle { display: block; }
+
+  .header-right { gap: 8px; }
+  .header-right .status-label { display: none; }
+  .voice-call-btn {
+    font-size: 0;
+    padding: 8px;
+    gap: 0;
+    width: 34px; height: 34px;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .voice-call-btn::before {
+    content: "🎙️";
+    font-size: 15px;
+  }
+  .emergency-badge {
+    font-size: 0;
+    padding: 8px;
+    width: 34px; height: 34px;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .emergency-badge-icon { font-size: 15px; }
+
+  .sidebar {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    bottom: 0;
+    width: 82vw;
+    max-width: 300px;
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    z-index: 900;
+    box-shadow: 4px 0 24px rgba(0,0,0,.15);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .bubble { max-width: 86%; }
+  .call-card { max-width: 100%; }
+  .call-transcript { max-height: 50vh; }
+}
+
+@media (max-width: 480px) {
+  header { padding: 0 14px; }
+  .hospital-sub { display: none; }
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 850;
+}
+.sidebar-backdrop.active { display: block; }
