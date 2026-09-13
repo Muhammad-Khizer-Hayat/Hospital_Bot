@@ -31,6 +31,14 @@ def create_app():
 
     return app
 
+# Module-level instance so a production WSGI server (gunicorn, etc.)
+# can import it directly as "app:app" — see Procfile.
+app = create_app()
+
 if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    # debug=True is a security risk in production (exposes a debugger
+    # that can run arbitrary code). Only enabled when FLASK_DEBUG=1 is
+    # explicitly set — leave it unset on your live deployment.
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)

@@ -1,7 +1,9 @@
-const API = "http://127.0.0.1:5000/api/chat";
-const UPLOAD_API = "http://127.0.0.1:5000/api/upload-doctors";
-const SOURCE_API = "http://127.0.0.1:5000/api/doctors-source";
-const DEPARTMENTS_API = "http://127.0.0.1:5000/api/departments";
+// Relative paths — works whether you're running locally or deployed,
+// since app.py serves the frontend and API from the same origin.
+const API = "/api/chat";
+const UPLOAD_API = "/api/upload-doctors";
+const SOURCE_API = "/api/doctors-source";
+const DEPARTMENTS_API = "/api/departments";
 
 // One session id per browser tab, persisted for the tab's lifetime.
 // The backend uses this to track multi-turn flows (like appointment
