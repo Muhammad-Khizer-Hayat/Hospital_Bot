@@ -73,5 +73,13 @@ def generate_ai_response(prompt):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("AI Error:", e)
+        # str(e) alone is often just "Connection error." with no detail —
+        # log the exception type and, when present, the wrapped __cause__
+        # (the actual httpx/socket-level error) so the real problem shows
+        # up in the logs instead of a generic message.
+        import traceback
+        print(f"AI Error [{type(e).__name__}]: {e}")
+        if e.__cause__:
+            print(f"  caused by [{type(e.__cause__).__name__}]: {e.__cause__}")
+        traceback.print_exc()
         return "AI service is currently unavailable."

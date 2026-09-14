@@ -55,6 +55,55 @@ def chat():
     return jsonify({"response": response, "session_id": session_id})
 
 
+@chat_bp.route("/diagnostics/groq", methods=["GET"])
+def diagnostics_groq():
+    """Visit this URL directly in a browser to check exactly where the
+    Groq connection is failing — DNS resolution, the raw HTTPS request,
+    or authentication — instead of guessing from a generic error."""
+    import socket
+    import time
+
+    from config import Config
+
+    result = {}
+
+    try:
+        ip = socket.gethostbyname("api.groq.com")
+        result["dns_resolution"] = {"ok": True, "resolved_ip": ip}
+    except Exception as e:
+        result["dns_resolution"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        result["diagnosis"] = "DNS can't resolve api.groq.com — likely a network/DNS restriction in this environment."
+        return jsonify(result)
+
+    try:
+        import httpx
+        start = time.time()
+        with httpx.Client(timeout=10) as http_client:
+            r = http_client.get(
+                "https://api.groq.com/openai/v1/models",
+                headers={"Authorization": f"Bearer {Config.GROQ_API_KEY or ''}"},
+            )
+        result["https_request"] = {
+            "ok": True,
+            "status_code": r.status_code,
+            "elapsed_seconds": round(time.time() - start, 2),
+        }
+        if r.status_code == 401:
+            result["diagnosis"] = "Network connectivity is fine — the API key itself is being rejected (401)."
+        elif r.status_code == 200:
+            result["diagnosis"] = "Everything works — DNS, network, and the API key are all fine."
+        else:
+            result["diagnosis"] = f"Reached Groq but got an unexpected status code: {r.status_code}."
+    except Exception as e:
+        result["https_request"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        result["diagnosis"] = "DNS resolves fine, but the HTTPS connection itself fails — likely outbound network/TLS being blocked in this environment."
+
+    result["groq_api_key_set"] = bool(Config.GROQ_API_KEY)
+    result["groq_api_key_prefix"] = (Config.GROQ_API_KEY[:7] + "…") if Config.GROQ_API_KEY else None
+
+    return jsonify(result)
+
+
 @chat_bp.route("/departments", methods=["GET"])
 def list_departments():
     return jsonify({"departments": get_all_departments()})
