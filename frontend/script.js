@@ -253,6 +253,68 @@ function clearAdminKey() {
   sessionStorage.removeItem("admin_key");
 }
 
+let adminAppointments = [];
+
+function localDateIso() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function renderAppointments(appointments) {
+  const body = document.getElementById("bookings-body");
+  const count = document.getElementById("bookings-count");
+  count.textContent = appointments.length;
+
+  if (appointments.length === 0) {
+    body.innerHTML = '<div class="bookings-empty"><div class="empty-icon">□</div><strong>No appointments for this date</strong><span>Try another date or clear the filter.</span></div>';
+    return;
+  }
+
+  body.innerHTML = appointments.map((a) => `
+    <article class="booking-row">
+      <div class="booking-row-topline">
+        <span class="booking-ref">REF #${escapeHtml(a.id || "—")}</span>
+        <span class="booking-status"><span></span> Confirmed</span>
+      </div>
+      <div class="booking-row-main">
+        <div class="booking-patient">
+          <div class="patient-avatar">${escapeHtml((a.patient_name || "?").trim().charAt(0).toUpperCase())}</div>
+          <div><strong class="booking-name">${escapeHtml(a.patient_name || "—")}</strong><span class="booking-contact">${escapeHtml(a.phone || "No phone provided")}</span></div>
+        </div>
+        <div class="booking-visit"><span class="booking-label">VISIT</span><strong>${escapeHtml(a.appointment_date || "—")}</strong><span>${escapeHtml(a.appointment_time || "—")}</span></div>
+      </div>
+      <div class="booking-row-details">
+        <span><b>Department</b>${escapeHtml(a.department || "—")}</span>
+        <span><b>Doctor</b>${escapeHtml(a.doctor_name || "Any available doctor")}</span>
+        <span><b>Country</b>${escapeHtml(a.country || "—")}</span>
+      </div>
+    </article>
+  `).join("");
+}
+
+function applyBookingDateFilter(date) {
+  document.getElementById("booking-date-quick").value = date === localDateIso() ? "today" : "all";
+  renderAppointments(date ? adminAppointments.filter((a) => a.appointment_date === date) : adminAppointments);
+}
+
+function applyBookingQuickFilter(value) {
+  const dateInput = document.getElementById("booking-date-filter");
+  if (value === "today") {
+    dateInput.value = localDateIso();
+    applyBookingDateFilter(dateInput.value);
+    return;
+  }
+  dateInput.value = "";
+  renderAppointments(adminAppointments);
+}
+
+function clearBookingDateFilter() {
+  document.getElementById("booking-date-quick").value = "all";
+  document.getElementById("booking-date-filter").value = "";
+  renderAppointments(adminAppointments);
+}
+
 async function openBookingsModal(forcePrompt = false) {
   closeSidebarOnMobile();
   const modal = document.getElementById("bookings-modal");
@@ -286,35 +348,8 @@ async function openBookingsModal(forcePrompt = false) {
     }
 
     const data = await res.json();
-    const appointments = data.appointments || [];
-    count.textContent = appointments.length;
-
-    if (appointments.length === 0) {
-      body.innerHTML = '<div class="bookings-empty"><div class="empty-icon">□</div><strong>No appointments yet</strong><span>New bookings will appear here.</span></div>';
-      return;
-    }
-
-    const rows = appointments.map((a) => `
-      <article class="booking-row">
-        <div class="booking-row-topline">
-          <span class="booking-ref">REF #${escapeHtml(a.id || "—")}</span>
-          <span class="booking-status"><span></span> Confirmed</span>
-        </div>
-        <div class="booking-row-main">
-          <div class="booking-patient">
-            <div class="patient-avatar">${escapeHtml((a.patient_name || "?").trim().charAt(0).toUpperCase())}</div>
-            <div><strong class="booking-name">${escapeHtml(a.patient_name || "—")}</strong><span class="booking-contact">${escapeHtml(a.phone || "No phone provided")}</span></div>
-          </div>
-          <div class="booking-visit"><span class="booking-label">VISIT</span><strong>${escapeHtml(a.appointment_date || "—")}</strong><span>${escapeHtml(a.appointment_time || "—")}</span></div>
-        </div>
-        <div class="booking-row-details">
-          <span><b>Department</b>${escapeHtml(a.department || "—")}</span>
-          <span><b>Doctor</b>${escapeHtml(a.doctor_name || "Any available doctor")}</span>
-          <span><b>Country</b>${escapeHtml(a.country || "—")}</span>
-        </div>
-      </article>
-    `).join("");
-    body.innerHTML = rows;
+    adminAppointments = data.appointments || [];
+    clearBookingDateFilter();
   } catch (err) {
     count.textContent = "—";
     body.innerHTML = '<div class="bookings-empty">⚠️ Could not load appointments.</div>';
