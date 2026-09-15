@@ -1,19 +1,6 @@
-# backend/auth.py
-"""
-Protects admin-only routes (viewing appointments, uploading a new
-doctors PDF) behind a single shared secret set via the ADMIN_API_KEY
-environment variable.
-
-This is intentionally simple — one shared password, not per-user
-accounts — appropriate for a small clinic/hospital admin team. If you
-need individual staff logins/roles later, this is the place to swap
-in something like Flask-Login.
-"""
 from functools import wraps
 from flask import jsonify, request
 from config import Config
-
-
 def require_admin(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
