@@ -7,8 +7,15 @@ exactly where models drop or invent details. A plain state machine
 can't do that.
 
 Flow order: name -> country -> department -> doctor -> date -> time
--> phone -> confirm. Identity (name/country) is collected first, then
-the appointment details.
+-> phone -> confirm. Date/time are real, bookable slots pulled from
+availability_service (which checks the database, so an already-taken
+slot is never offered twice).
+
+Every step that has a fixed set of valid answers (department, doctor,
+date, time, yes/no confirm) also returns a "choices" list alongside
+the message — the frontend renders these as clickable buttons, but
+free-text/spoken replies are still matched too, so voice mode keeps
+working exactly the same way.
 
 Session state is kept in memory, keyed by a session_id the frontend
 generates once and sends with every request. This is fine for a
@@ -27,6 +34,7 @@ import dateparser
 
 import database
 import hospital_data
+from services import availability_service
 
 BOOKING_TRIGGERS = {
     "book", "booking", "appointment", "schedule", "reserve",
@@ -74,18 +82,22 @@ def is_new_topic(message: str) -> bool:
     return bool(tokens & QUESTION_STARTERS or tokens & NEW_TOPIC_WORDS)
 
 
+def _reply(message: str, choices=None):
+    return {"message": message, "choices": choices or []}
+
+
 def _new_state():
     return {"step": "name", "data": {}}
 
 
-def start_booking(session_id: str) -> str:
+def start_booking(session_id: str) -> dict:
     _sessions[session_id] = _new_state()
-    return "Sure — let's get you booked in. Can I get your full name, please?"
+    return _reply("Sure — let's get you booked in. Can I get your full name, please?")
 
 
-def _cancel(session_id: str) -> str:
+def _cancel(session_id: str) -> dict:
     _sessions.pop(session_id, None)
-    return "No problem, I've cancelled that booking. Let me know if you'd like to start again."
+    return _reply("No problem, I've cancelled that booking. Let me know if you'd like to start again.")
 
 
 def _match_department(text: str):
@@ -101,6 +113,10 @@ def _match_department(text: str):
     return None
 
 
+def _department_choices():
+    return [{"label": d, "value": d} for d in hospital_data.get_all_departments()]
+
+
 def _match_doctor(text: str, doctor_pool):
     tokens = _tokens(text)
     for doc in doctor_pool:
@@ -111,11 +127,41 @@ def _match_doctor(text: str, doctor_pool):
     return None
 
 
-def _format_date(text: str):
-    parsed = dateparser.parse(text, settings={"PREFER_DATES_FROM": "future"})
+def _doctor_choices(doctor_pool):
+    return [{"label": d["name"], "value": d["name"]} for d in doctor_pool]
+
+
+def _match_date_choice(message: str, available_dates: list):
+    msg = message.strip().lower()
+    for d in available_dates:
+        if msg == d["value"] or msg == d["label"].lower():
+            return d["value"]
+    # Free-text/spoken fallback ("tomorrow", "next monday", "16 sep")
+    parsed = dateparser.parse(message, settings={"PREFER_DATES_FROM": "future"})
     if parsed:
-        return parsed.strftime("%A, %B %d, %Y"), True
-    return text.strip(), False
+        iso = parsed.date().isoformat()
+        if any(d["value"] == iso for d in available_dates):
+            return iso
+    return None
+
+
+def _normalize_time(text: str):
+    return re.sub(r"[\s.]", "", text.strip().lower())
+
+
+def _match_time_choice(message: str, available_times: list, date_value: str):
+    normalized_msg = _normalize_time(message)
+    for t in available_times:
+        if normalized_msg == _normalize_time(t):
+            return t
+    # Free-text/spoken fallback ("9am", "2 o'clock", "14:00")
+    parsed = dateparser.parse(f"{date_value} {message}")
+    if parsed:
+        formatted = parsed.strftime("%I:%M %p").lstrip("0")
+        for t in available_times:
+            if _normalize_time(t) == _normalize_time(formatted):
+                return t
+    return None
 
 
 def _phone_looks_valid(text: str):
@@ -125,20 +171,21 @@ def _phone_looks_valid(text: str):
 
 def _country_looks_valid(text: str):
     letters = re.sub(r"[^a-zA-Z]", "", text)
-    return len(letters) >= 3
+    return len(letters) >= 2
 
 
 def _summary(data: dict) -> str:
+    date_label = availability_service.format_date_label(data.get("date", ""))
     lines = [
         f"- Name: {data.get('name')}",
         f"- Country: {data.get('country')}",
         f"- Department: {data.get('department')}",
         f"- Doctor: {data.get('doctor_name', 'Any available doctor')}",
-        f"- Date: {data.get('date')}",
+        f"- Date: {date_label}",
         f"- Time: {data.get('time')}",
         f"- Phone: {data.get('phone')}",
     ]
-    return "Here's what I've got:\n\n" + "\n".join(lines) + "\n\nShall I confirm this appointment? (yes/no)"
+    return "Here's what I've got:\n\n" + "\n".join(lines) + "\n\nShall I confirm this appointment?"
 
 
 def _save_appointment(data: dict) -> dict:
@@ -148,7 +195,25 @@ def _save_appointment(data: dict) -> dict:
     return database.insert_appointment(record)
 
 
-def handle_booking_reply(session_id: str, message: str) -> str:
+def _ask_for_date(data: dict) -> dict:
+    available_dates = availability_service.get_available_dates(data.get("doctor_name"))
+    if not available_dates:
+        return _reply(
+            "I'm sorry, there are no open slots in the next two weeks for that doctor. "
+            "Please call the hospital directly to arrange a time, or say 'cancel' to stop."
+        )
+    return _reply("Which date works for you?", choices=available_dates)
+
+
+def _ask_for_time(data: dict) -> dict:
+    available_times = availability_service.get_available_times(data.get("doctor_name"), data["date"])
+    if not available_times:
+        # Slot filled up between choosing the date and now — bounce back to date step.
+        return _ask_for_date(data)
+    return _reply("What time works for you?", choices=[{"label": t, "value": t} for t in available_times])
+
+
+def handle_booking_reply(session_id: str, message: str) -> dict:
     if wants_to_cancel(message):
         return _cancel(session_id)
 
@@ -161,83 +226,102 @@ def handle_booking_reply(session_id: str, message: str) -> str:
 
     if step == "name":
         if len(message.strip()) < 2:
-            return "Sorry, could you tell me your full name?"
+            return _reply("Sorry, could you tell me your full name?")
         data["name"] = message.strip()
         state["step"] = "country"
-        return f"Thanks, {data['name']}. Which country are you booking from?"
+        return _reply(f"Thanks, {data['name']}. Which country are you booking from?")
 
     if step == "country":
         if not _country_looks_valid(message):
-            return "Sorry, which country are you calling/booking from?"
+            return _reply("Sorry, which country are you calling/booking from?")
         data["country"] = message.strip()
-        dept_list = ", ".join(hospital_data.get_all_departments())
         state["step"] = "department"
-        return f"Got it. Which department would you like to see a doctor in? We have: {dept_list}."
+        return _reply("Got it. Which department would you like to see a doctor in?", choices=_department_choices())
 
     if step == "department":
         dept = _match_department(message)
         if not dept:
-            dept_list = ", ".join(hospital_data.get_all_departments())
-            return f"Sorry, I didn't catch a valid department. We have: {dept_list}. Which one?"
+            return _reply("Sorry, I didn't catch a valid department. Which one?", choices=_department_choices())
         data["department"] = dept
         doctor_pool = hospital_data.get_doctors_by_department(dept)
         if not doctor_pool:
             data["doctor_name"] = None
             state["step"] = "date"
-            return f"Got it, {dept}. What date would you like to come in?"
+            return _ask_for_date(data)
         if len(doctor_pool) == 1:
             data["doctor_name"] = doctor_pool[0]["name"]
             state["step"] = "date"
-            return f"Got it — {dept}, you'll see {doctor_pool[0]['name']}. What date would you like to come in?"
-        names = ", ".join(d["name"] for d in doctor_pool)
+            return _ask_for_date(data)
         state["step"] = "doctor"
         state["_doctor_pool"] = doctor_pool
-        return f"Which doctor would you prefer? Options: {names}."
+        return _reply("Which doctor would you prefer?", choices=_doctor_choices(doctor_pool))
 
     if step == "doctor":
         doctor_pool = state.get("_doctor_pool", hospital_data.get_doctors_by_department(data.get("department", "")))
         doc = _match_doctor(message, doctor_pool)
         if not doc:
-            names = ", ".join(d["name"] for d in doctor_pool)
-            return f"Sorry, I didn't catch that. Please choose one of: {names}."
+            return _reply("Sorry, I didn't catch that — which doctor?", choices=_doctor_choices(doctor_pool))
         data["doctor_name"] = doc["name"]
         state["step"] = "date"
-        return f"Great, {doc['name']} it is. What date would you like to come in?"
+        return _ask_for_date(data)
 
     if step == "date":
-        formatted, understood = _format_date(message)
-        data["date"] = formatted
+        available_dates = availability_service.get_available_dates(data.get("doctor_name"))
+        matched = _match_date_choice(message, available_dates)
+        if not matched:
+            return _reply("Sorry, that date isn't available — please pick one:", choices=available_dates)
+        data["date"] = matched
         state["step"] = "time"
-        prefix = "Got it" if understood else "Okay, noted"
-        return f"{prefix}. What time works for you?"
+        return _ask_for_time(data)
 
     if step == "time":
-        data["time"] = message.strip()
+        available_times = availability_service.get_available_times(data.get("doctor_name"), data["date"])
+        matched = _match_time_choice(message, available_times, data["date"])
+        if not matched:
+            return _reply(
+                "Sorry, that time isn't available — please pick one:",
+                choices=[{"label": t, "value": t} for t in available_times],
+            )
+        data["time"] = matched
         state["step"] = "phone"
-        return "What's the best contact phone number to reach you on?"
+        return _reply("What's the best contact phone number to reach you on?")
 
     if step == "phone":
         if not _phone_looks_valid(message):
-            return "That doesn't look like a valid phone number — could you say it again?"
+            return _reply("That doesn't look like a valid phone number — could you say it again?")
         data["phone"] = message.strip()
         state["step"] = "confirm"
-        return _summary(data)
+        return _reply(_summary(data), choices=[{"label": "Yes, confirm", "value": "yes"}, {"label": "No, cancel", "value": "no"}])
 
     if step == "confirm":
         reply = message.strip().lower()
         if reply in {"yes", "y", "confirm", "yeah", "yep", "correct"}:
+            # Re-check availability right before saving — the slot could
+            # have been taken by someone else since it was offered.
+            if data.get("doctor_name") and not availability_service.is_slot_available(
+                data["doctor_name"], data["date"], data["time"]
+            ):
+                state["step"] = "date"
+                return _reply(
+                    "Sorry, that slot was just taken by someone else. Let's pick another date:",
+                    choices=availability_service.get_available_dates(data.get("doctor_name")),
+                )
             record = _save_appointment(data)
             _sessions.pop(session_id, None)
-            return (
+            date_label = availability_service.format_date_label(record["date"])
+            return _reply(
                 f"You're all set, {record['name']}! Appointment confirmed with "
                 f"{record.get('doctor_name') or 'an available doctor'} ({record['department']}) "
-                f"on {record['date']} at {record['time']}. "
+                f"on {date_label} at {record['time']}. "
                 f"Your reference number is {record['id']}."
             )
         if reply in {"no", "n", "nope"}:
             return _cancel(session_id)
-        return "Sorry, just to confirm — should I book this? (yes/no)"
+        return _reply(
+            "Sorry, just to confirm — should I book this?",
+            choices=[{"label": "Yes, confirm", "value": "yes"}, {"label": "No, cancel", "value": "no"}],
+        )
 
     # Shouldn't get here, but fail safe rather than crash the conversation
     _sessions.pop(session_id, None)
-    return "Something went wrong with that booking — let's start over. Would you like to book an appointment?"
+    return _reply("Something went wrong with that booking — let's start over. Would you like to book an appointment?")

@@ -27,7 +27,10 @@ async function askBackend(text) {
     body: JSON.stringify({ message: text, session_id: getSessionId() }),
   });
   const data = await res.json();
-  return data.response || "Sorry, I didn't get a response.";
+  return {
+    response: data.response || "Sorry, I didn't get a response.",
+    choices: data.choices || [],
+  };
 }
 
 // TODO: replace with your real hospital/on-call contact number.
@@ -107,7 +110,7 @@ function renderMarkdown(raw) {
   return html;
 }
 
-function addBubble(text, role) {
+function addBubble(text, role, choices) {
   const box = document.getElementById("messages");
 
   const row = document.createElement("div");
@@ -124,6 +127,27 @@ function addBubble(text, role) {
   row.appendChild(avatar);
   row.appendChild(bubble);
   box.appendChild(row);
+
+  if (role === "bot" && Array.isArray(choices) && choices.length > 0) {
+    const choiceRow = document.createElement("div");
+    choiceRow.className = "choice-row";
+    choices.forEach((choice) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "choice-btn";
+      btn.textContent = choice.label;
+      btn.onclick = () => {
+        // Disable the whole set once one is picked, so old options
+        // from an earlier step can't be clicked after moving on.
+        choiceRow.querySelectorAll(".choice-btn").forEach((b) => (b.disabled = true));
+        choiceRow.classList.add("answered");
+        sendMessage(choice.value);
+      };
+      choiceRow.appendChild(btn);
+    });
+    box.appendChild(choiceRow);
+  }
+
   scrollBottom();
   return bubble;
 }
@@ -155,10 +179,10 @@ function removeTyping() {
 }
 
 // ── Send ───────────────────────────────────────────────────────
-async function sendMessage() {
+async function sendMessage(prefilledText) {
   const input = document.getElementById("msg-input");
   const btn   = document.getElementById("send-btn");
-  const text  = input.value.trim();
+  const text  = (prefilledText !== undefined ? prefilledText : input.value).trim();
   if (!text) return;
 
   hideWelcome();
@@ -169,9 +193,9 @@ async function sendMessage() {
   showTyping();
 
   try {
-    const reply = await askBackend(text);
+    const { response, choices } = await askBackend(text);
     removeTyping();
-    addBubble(reply, "bot");
+    addBubble(response, "bot", choices);
   } catch (err) {
     removeTyping();
     addBubble("⚠️ Could not reach the server. Make sure the backend is running.", "bot");
@@ -474,9 +498,20 @@ function startListening() {
 
     setCallStatus("Thinking…");
     try {
-      const reply = await askBackend(transcript);
-      appendCallTranscript(reply.replace(/\*\*/g, "").replace(/^- /gm, "• "), "bot");
-      if (voiceCallActive) speak(reply, () => startListening());
+      const { response, choices } = await askBackend(transcript);
+      const cleanResponse = response.replace(/\*\*/g, "").replace(/^- /gm, "• ");
+      appendCallTranscript(cleanResponse, "bot");
+
+      // Messages rely on clickable buttons for their options in text
+      // chat — since there's nothing to click over voice, read the
+      // options out loud too, or the caller has no idea what to say.
+      let spoken = response;
+      if (choices && choices.length > 0) {
+        const optionsList = choices.map((c) => c.label).join(", ");
+        spoken = `${response} Your options are: ${optionsList}.`;
+      }
+
+      if (voiceCallActive) speak(spoken, () => startListening());
     } catch (err) {
       appendCallTranscript("Sorry, I couldn't reach the server.", "bot");
       if (voiceCallActive) speak("Sorry, I couldn't reach the server.", () => startListening());

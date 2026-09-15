@@ -80,6 +80,20 @@ def insert_appointment(record: dict) -> dict:
     return record
 
 
+def get_booked_times(doctor_name: str, date_iso: str) -> list:
+    """Times already taken for a given doctor on a given ISO date
+    (YYYY-MM-DD) — used to compute real availability and prevent
+    double-booking the same slot."""
+    if not doctor_name:
+        return []
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT appointment_time FROM appointments WHERE doctor_name = ? AND appointment_date = ?",
+            (doctor_name, date_iso),
+        ).fetchall()
+        return [row["appointment_time"] for row in rows]
+
+
 def get_all_appointments() -> list:
     with get_connection() as conn:
         rows = conn.execute(
