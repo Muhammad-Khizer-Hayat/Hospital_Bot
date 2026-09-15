@@ -3,6 +3,7 @@ import uuid
 
 from flask import Blueprint, request, jsonify
 
+from auth import require_admin
 from hospital_data import get_doctors_by_department, get_all_departments
 from services.ai_service import generate_ai_response
 from services.appointment_service import (
@@ -119,6 +120,7 @@ def list_doctors():
 
 
 @chat_bp.route("/appointments", methods=["GET"])
+@require_admin
 def list_appointments():
     import database
     return jsonify({"appointments": database.get_all_appointments()})

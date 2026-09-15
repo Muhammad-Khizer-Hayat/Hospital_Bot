@@ -212,6 +212,23 @@ function closeSidebarOnMobile() {
 }
 
 // ── Bookings viewer ────────────────────────────────────────────
+// ── Admin auth (for viewing bookings / uploading a doctors PDF) ──
+// A single shared password, not per-user accounts — set via the
+// ADMIN_API_KEY environment variable on the server. Prompted once
+// per browser tab and cached in sessionStorage after that.
+function getAdminKey(forcePrompt = false) {
+  let key = sessionStorage.getItem("admin_key");
+  if (!key || forcePrompt) {
+    key = window.prompt("Enter the admin password to continue:");
+    if (key) sessionStorage.setItem("admin_key", key);
+  }
+  return key || "";
+}
+
+function clearAdminKey() {
+  sessionStorage.removeItem("admin_key");
+}
+
 async function openBookingsModal() {
   closeSidebarOnMobile();
   const modal = document.getElementById("bookings-modal");
@@ -219,8 +236,27 @@ async function openBookingsModal() {
   modal.classList.add("active");
   body.innerHTML = '<div class="bookings-loading">Loading…</div>';
 
+  const key = getAdminKey();
+  if (!key) {
+    body.innerHTML = '<div class="bookings-empty">Admin password required.</div>';
+    return;
+  }
+
   try {
-    const res = await fetch(`${API.replace("/chat", "")}/appointments`);
+    const res = await fetch(`${API.replace("/chat", "")}/appointments`, {
+      headers: { "X-Admin-Key": key },
+    });
+
+    if (res.status === 401) {
+      clearAdminKey();
+      body.innerHTML = '<div class="bookings-empty">Incorrect password. <a href="#" onclick="openBookingsModal(); return false;">Try again</a>.</div>';
+      return;
+    }
+    if (res.status === 503) {
+      body.innerHTML = '<div class="bookings-empty">Admin access isn\'t configured on the server yet (ADMIN_API_KEY not set).</div>';
+      return;
+    }
+
     const data = await res.json();
     const appointments = data.appointments || [];
 
@@ -272,6 +308,15 @@ async function uploadDoctorsPdf(input) {
   if (!file) return;
 
   const statusEl = document.getElementById("upload-status");
+
+  const key = getAdminKey();
+  if (!key) {
+    statusEl.textContent = "Admin password required to upload.";
+    statusEl.className = "upload-status error";
+    input.value = "";
+    return;
+  }
+
   statusEl.textContent = "Reading PDF…";
   statusEl.className = "upload-status uploading";
 
@@ -279,7 +324,24 @@ async function uploadDoctorsPdf(input) {
   formData.append("file", file);
 
   try {
-    const res = await fetch(UPLOAD_API, { method: "POST", body: formData });
+    const res = await fetch(UPLOAD_API, {
+      method: "POST",
+      headers: { "X-Admin-Key": key },
+      body: formData,
+    });
+
+    if (res.status === 401) {
+      clearAdminKey();
+      statusEl.textContent = "Incorrect admin password. Try uploading again.";
+      statusEl.className = "upload-status error";
+      return;
+    }
+    if (res.status === 503) {
+      statusEl.textContent = "Admin access isn't configured on the server yet.";
+      statusEl.className = "upload-status error";
+      return;
+    }
+
     const data = await res.json();
 
     if (!res.ok) {

@@ -5,6 +5,7 @@ import tempfile
 from flask import Blueprint, jsonify, request
 
 import hospital_data
+from auth import require_admin
 from services.pdf_service import parse_doctors_pdf, save_doctors_data
 
 upload_bp = Blueprint("upload", __name__)
@@ -13,6 +14,7 @@ ALLOWED_EXT = {".pdf"}
 
 
 @upload_bp.route("/upload-doctors", methods=["POST"])
+@require_admin
 def upload_doctors():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded. Send it as multipart form field 'file'."}), 400
