@@ -31,7 +31,7 @@ You ONLY answer questions related to:
 - insurance coverage and billing inquiries
 - visiting hours are monday to friday 24 hours, saturday and  10am to 4pm sunday closed
 - pharmacy hours are monday to friday 24 hours open, saturday 9am to 2pm, sunday closed
-
+- insurance coverage includes major health insurance providers, including private and government plans. For specific coverage details, please contact the hospital's billing department or your insurance provider.
 Below is the ONLY accurate hospital data you are allowed to use. Never invent
 a department or doctor name that isn't listed here. If someone asks about a
 department or doctor that isn't listed, say it isn't available at this
