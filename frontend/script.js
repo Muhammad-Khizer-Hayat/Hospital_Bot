@@ -253,15 +253,17 @@ function clearAdminKey() {
   sessionStorage.removeItem("admin_key");
 }
 
-async function openBookingsModal() {
+async function openBookingsModal(forcePrompt = false) {
   closeSidebarOnMobile();
   const modal = document.getElementById("bookings-modal");
   const body = document.getElementById("bookings-body");
+  const count = document.getElementById("bookings-count");
   modal.classList.add("active");
   body.innerHTML = '<div class="bookings-loading">Loading…</div>';
 
-  const key = getAdminKey();
+  const key = getAdminKey(forcePrompt);
   if (!key) {
+    count.textContent = "—";
     body.innerHTML = '<div class="bookings-empty">Admin password required.</div>';
     return;
   }
@@ -273,37 +275,48 @@ async function openBookingsModal() {
 
     if (res.status === 401) {
       clearAdminKey();
+      count.textContent = "—";
       body.innerHTML = '<div class="bookings-empty">Incorrect password. <a href="#" onclick="openBookingsModal(); return false;">Try again</a>.</div>';
       return;
     }
     if (res.status === 503) {
+      count.textContent = "—";
       body.innerHTML = '<div class="bookings-empty">Admin access isn\'t configured on the server yet (ADMIN_API_KEY not set).</div>';
       return;
     }
 
     const data = await res.json();
     const appointments = data.appointments || [];
+    count.textContent = appointments.length;
 
     if (appointments.length === 0) {
-      body.innerHTML = '<div class="bookings-empty">No appointments booked yet.</div>';
+      body.innerHTML = '<div class="bookings-empty"><div class="empty-icon">□</div><strong>No appointments yet</strong><span>New bookings will appear here.</span></div>';
       return;
     }
 
     const rows = appointments.map((a) => `
-      <div class="booking-row">
+      <article class="booking-row">
+        <div class="booking-row-topline">
+          <span class="booking-ref">REF #${escapeHtml(a.id || "—")}</span>
+          <span class="booking-status"><span></span> Confirmed</span>
+        </div>
         <div class="booking-row-main">
-          <span class="booking-name">${a.patient_name || "—"}</span>
-          <span class="booking-ref">#${a.id}</span>
+          <div class="booking-patient">
+            <div class="patient-avatar">${escapeHtml((a.patient_name || "?").trim().charAt(0).toUpperCase())}</div>
+            <div><strong class="booking-name">${escapeHtml(a.patient_name || "—")}</strong><span class="booking-contact">${escapeHtml(a.phone || "No phone provided")}</span></div>
+          </div>
+          <div class="booking-visit"><span class="booking-label">VISIT</span><strong>${escapeHtml(a.appointment_date || "—")}</strong><span>${escapeHtml(a.appointment_time || "—")}</span></div>
         </div>
         <div class="booking-row-details">
-          ${a.department || "—"}${a.doctor_name ? " · " + a.doctor_name : ""}<br>
-          ${a.appointment_date || "—"} at ${a.appointment_time || "—"}<br>
-          ${a.country ? a.country + " · " : ""}${a.phone || "—"}
+          <span><b>Department</b>${escapeHtml(a.department || "—")}</span>
+          <span><b>Doctor</b>${escapeHtml(a.doctor_name || "Any available doctor")}</span>
+          <span><b>Country</b>${escapeHtml(a.country || "—")}</span>
         </div>
-      </div>
+      </article>
     `).join("");
     body.innerHTML = rows;
   } catch (err) {
+    count.textContent = "—";
     body.innerHTML = '<div class="bookings-empty">⚠️ Could not load appointments.</div>';
   }
 }

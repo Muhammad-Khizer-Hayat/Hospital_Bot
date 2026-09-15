@@ -154,8 +154,23 @@
   <div id="bookings-modal" class="bookings-modal">
     <div class="bookings-card">
       <div class="bookings-header">
-        <div class="bookings-title">Booked Appointments</div>
-        <button class="bookings-close" onclick="closeBookingsModal()" aria-label="Close">✕</button>
+        <div>
+          <div class="bookings-eyebrow">ADMIN CONSOLE</div>
+          <div class="bookings-title">Appointment schedule</div>
+          <div class="bookings-subtitle">Review recent patient bookings</div>
+        </div>
+        <div class="bookings-header-actions">
+          <button class="bookings-refresh" onclick="openBookingsModal(true)" aria-label="Refresh appointments" title="Refresh appointments">↻</button>
+          <button class="bookings-close" onclick="closeBookingsModal()" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="bookings-summary">
+        <div class="bookings-summary-icon">▦</div>
+        <div>
+          <div id="bookings-count" class="bookings-count">—</div>
+          <div class="bookings-summary-label">total appointments</div>
+        </div>
+        <div class="bookings-live"><span></span> Live records</div>
       </div>
       <div id="bookings-body" class="bookings-body">
         <div class="bookings-loading">Loading…</div>
